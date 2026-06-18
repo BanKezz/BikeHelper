@@ -2,7 +2,8 @@
 
 Project ini di peruntukan untuk tugas besar Praktikum Pemrograman Berbasis Mobile
 
-## Getting Started
+Struktur Code
+<img width="290" height="811" alt="image" src="https://github.com/user-attachments/assets/a333bad3-80c1-4d5c-88e3-d1b161cead7d" />
 
 This project is a starting point for a Flutter application.
 
