@@ -1,6 +1,6 @@
-# bikehelper
+# BikeHelper
 
-A new Flutter project.
+Project ini di peruntukan untuk tugas besar Praktikum Pemrograman Berbasis Mobile
 
 ## Getting Started
 
