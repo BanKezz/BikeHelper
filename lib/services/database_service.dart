@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/motor_model.dart';
 import 'supabase_config.dart';
+import 'auth_service.dart';
 
 class DatabaseService {
   SupabaseClient get _supabase => Supabase.instance.client;
@@ -18,67 +19,111 @@ class DatabaseService {
     }
   }
 
+  // Key SharedPreferences untuk motor list per user
+  Future<String> _motorListKey() async {
+    final username = await AuthService().getCurrentUsername();
+    return 'motor_list_$username';
+  }
+
+  // Generate ID unik sederhana
+  String _generateId() {
+    return DateTime.now().millisecondsSinceEpoch.toString();
+  }
+
   // ==========================================
-  // DATA MOTOR
+  // DATA MOTOR — MULTI MOTOR
   // ==========================================
 
-  // Mendapatkan data motor
-  Future<MotorModel?> getMotor() async {
+  /// Ambil semua motor milik user
+  Future<List<MotorModel>> getAllMotors() async {
     if (SupabaseConfig.isValid && _currentUserId != null) {
       try {
         final response = await _supabase
             .from('motors')
             .select()
             .eq('user_id', _currentUserId!)
-            .maybeSingle();
+            .order('created_at', ascending: false);
 
-        if (response != null) {
-          return MotorModel(
-            namaMotor: response['nama_motor'] ?? '',
-            tahun: response['tahun'] ?? '',
-            odometer: response['odometer'] ?? '',
-            fotoPath: response['foto_path'],
-          );
-        }
+        return List<Map<String, dynamic>>.from(response)
+            .map((m) => MotorModel.fromMap(m))
+            .toList();
       } catch (e) {
-        debugPrint('Error getMotor dari Supabase: $e');
+        debugPrint('Error getAllMotors dari Supabase: $e');
       }
     }
 
     // Fallback SharedPreferences
+    final key = await _motorListKey();
     final prefs = await SharedPreferences.getInstance();
-    final motorJson = prefs.getString('local_motor_data');
-    if (motorJson != null) {
-      try {
-        return MotorModel.fromMap(json.decode(motorJson));
-      } catch (_) {
-        return null;
-      }
+    final raw = prefs.getString(key);
+    if (raw == null) return [];
+    try {
+      final List decoded = json.decode(raw);
+      return decoded.map((e) => MotorModel.fromMap(Map<String, dynamic>.from(e))).toList();
+    } catch (_) {
+      return [];
     }
-    return null;
   }
 
-  // Menyimpan atau memperbarui data motor
-  Future<bool> saveMotor(MotorModel motor) async {
+  /// Ambil motor pertama (motor aktif default)
+  Future<MotorModel?> getMotor() async {
+    final motors = await getAllMotors();
+    return motors.isNotEmpty ? motors.first : null;
+  }
+
+  /// Tambah motor baru
+  Future<bool> addMotor(MotorModel motor) async {
+    final newMotor = motor.copyWith(id: _generateId());
+
     if (SupabaseConfig.isValid && _currentUserId != null) {
       try {
-        final data = {
+        await _supabase.from('motors').insert({
           'user_id': _currentUserId,
-          'nama_motor': motor.namaMotor,
-          'tahun': motor.tahun,
-          'odometer': motor.odometer,
-          'foto_path': motor.fotoPath,
-        };
+          'nama_motor': newMotor.namaMotor,
+          'tahun': newMotor.tahun,
+          'odometer': newMotor.odometer,
+          'plat_nomor': newMotor.platNomor,
+          'foto_path': newMotor.fotoPath,
+        });
+        // Refresh local cache
+        await _syncMotorsToLocal();
+        return true;
+      } catch (e) {
+        debugPrint('Error addMotor ke Supabase: $e');
+        return false;
+      }
+    }
 
-        // Menggunakan upsert (update if exists, insert if not)
-        await _supabase.from('motors').upsert(
-              data,
-              onConflict: 'user_id', // Menjamin 1 user hanya punya 1 motor
-            );
-        
-        // Simpan juga ke local cache
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('local_motor_data', json.encode(motor.toMap()));
+    // Fallback SharedPreferences
+    final key = await _motorListKey();
+    final prefs = await SharedPreferences.getInstance();
+    final motors = await getAllMotors();
+    motors.insert(0, newMotor);
+    await prefs.setString(key, json.encode(motors.map((m) => m.toMap()).toList()));
+    return true;
+  }
+
+  /// Simpan/update motor berdasarkan ID
+  Future<bool> saveMotor(MotorModel motor) async {
+    // Jika belum punya ID, anggap sebagai tambah baru
+    if (motor.id == null || motor.id!.isEmpty) {
+      return addMotor(motor);
+    }
+
+    if (SupabaseConfig.isValid && _currentUserId != null) {
+      try {
+        await _supabase
+            .from('motors')
+            .update({
+              'nama_motor': motor.namaMotor,
+              'tahun': motor.tahun,
+              'odometer': motor.odometer,
+              'plat_nomor': motor.platNomor,
+              'foto_path': motor.fotoPath,
+            })
+            .eq('user_id', _currentUserId!)
+            .eq('id', motor.id!);
+        await _syncMotorsToLocal();
         return true;
       } catch (e) {
         debugPrint('Error saveMotor ke Supabase: $e');
@@ -87,8 +132,60 @@ class DatabaseService {
     }
 
     // Fallback SharedPreferences
+    final key = await _motorListKey();
     final prefs = await SharedPreferences.getInstance();
-    return await prefs.setString('local_motor_data', json.encode(motor.toMap()));
+    final motors = await getAllMotors();
+    final idx = motors.indexWhere((m) => m.id == motor.id);
+    if (idx >= 0) {
+      motors[idx] = motor;
+    } else {
+      motors.insert(0, motor);
+    }
+    await prefs.setString(key, json.encode(motors.map((m) => m.toMap()).toList()));
+    return true;
+  }
+
+  /// Hapus motor berdasarkan ID
+  Future<bool> deleteMotor(String motorId) async {
+    if (SupabaseConfig.isValid && _currentUserId != null) {
+      try {
+        await _supabase
+            .from('motors')
+            .delete()
+            .eq('user_id', _currentUserId!)
+            .eq('id', motorId);
+        await _syncMotorsToLocal();
+        return true;
+      } catch (e) {
+        debugPrint('Error deleteMotor dari Supabase: $e');
+        return false;
+      }
+    }
+
+    // Fallback SharedPreferences
+    final key = await _motorListKey();
+    final prefs = await SharedPreferences.getInstance();
+    final motors = await getAllMotors();
+    motors.removeWhere((m) => m.id == motorId);
+    await prefs.setString(key, json.encode(motors.map((m) => m.toMap()).toList()));
+    return true;
+  }
+
+  Future<void> _syncMotorsToLocal() async {
+    try {
+      if (_currentUserId == null) return;
+      final response = await _supabase
+          .from('motors')
+          .select()
+          .eq('user_id', _currentUserId!)
+          .order('created_at', ascending: false);
+      final motors = List<Map<String, dynamic>>.from(response)
+          .map((m) => MotorModel.fromMap(m))
+          .toList();
+      final key = await _motorListKey();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, json.encode(motors.map((m) => m.toMap()).toList()));
+    } catch (_) {}
   }
 
   // ==========================================

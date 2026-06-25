@@ -18,7 +18,7 @@ void main() async {
     try {
       await Supabase.initialize(
         url: SupabaseConfig.supabaseUrl,
-        anonKey: SupabaseConfig.supabaseAnonKey,
+        anonKey: SupabaseConfig.supabaseAnonKey, // ignore: deprecated_member_use
       );
     } catch (e) {
       debugPrint('Error initializing Supabase: $e');

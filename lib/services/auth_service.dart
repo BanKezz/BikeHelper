@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -6,17 +7,38 @@ import 'supabase_config.dart';
 class AuthService {
   SupabaseClient get _supabase => Supabase.instance.client;
 
-  static const _keyUsername = 'username';
-  static const _keyPassword = 'password';
+  static const _keyAccounts = 'accounts'; // List<Map> semua akun terdaftar
+  static const _keyCurrentUser = 'current_username';
   static const _keyIsLoggedIn = 'is_logged_in';
 
   // Helper untuk membuat virtual email dari username
   String _getVirtualEmail(String username) {
-    final cleanUsername = username.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    final cleanUsername =
+        username.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
     return '$cleanUsername@bikehelpers.local';
   }
 
-  // Simpan akun saat register
+  // Ambil semua akun tersimpan di SharedPreferences
+  Future<List<Map<String, String>>> _getAccounts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyAccounts);
+    if (raw == null) return [];
+    try {
+      final List decoded = json.decode(raw);
+      return decoded
+          .map((e) => Map<String, String>.from(e as Map))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _saveAccounts(List<Map<String, String>> accounts) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyAccounts, json.encode(accounts));
+  }
+
+  // Daftarkan akun baru
   Future<bool> register(String username, String password) async {
     if (SupabaseConfig.isValid) {
       try {
@@ -25,12 +47,11 @@ class AuthService {
           email: email,
           password: password,
         );
-        
-        // Register berhasil jika user tidak null
+
         if (response.user != null) {
-          // Simpan username lokal untuk kebutuhan profile UI
+          // Simpan username lokal
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_keyUsername, username);
+          await prefs.setString(_keyCurrentUser, username);
           return true;
         }
         return false;
@@ -40,17 +61,21 @@ class AuthService {
       }
     }
 
-    // Fallback SharedPreferences
+    // Fallback: simpan ke List akun di SharedPreferences
+    final accounts = await _getAccounts();
+
+    // Cek username sudah ada
+    final exists = accounts.any((acc) =>
+        acc['username']?.toLowerCase() == username.trim().toLowerCase());
+    if (exists) return false;
+
+    accounts.add({'username': username.trim(), 'password': password});
+    await _saveAccounts(accounts);
+
+    // Set sebagai current user dan mark logged in
     final prefs = await SharedPreferences.getInstance();
-
-    // Cek apakah username sudah dipakai
-    final existing = prefs.getString(_keyUsername);
-    if (existing != null && existing == username) {
-      return false; // username sudah ada
-    }
-
-    await prefs.setString(_keyUsername, username);
-    await prefs.setString(_keyPassword, password);
+    await prefs.setString(_keyCurrentUser, username.trim());
+    await prefs.setBool(_keyIsLoggedIn, true);
     return true;
   }
 
@@ -66,7 +91,7 @@ class AuthService {
 
         if (response.session != null) {
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_keyUsername, username);
+          await prefs.setString(_keyCurrentUser, username);
           await prefs.setBool(_keyIsLoggedIn, true);
           return true;
         }
@@ -77,12 +102,18 @@ class AuthService {
       }
     }
 
-    // Fallback SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    final savedUsername = prefs.getString(_keyUsername);
-    final savedPassword = prefs.getString(_keyPassword);
+    // Fallback: cek dari List akun
+    final accounts = await _getAccounts();
+    final match = accounts.firstWhere(
+      (acc) =>
+          acc['username']?.toLowerCase() == username.trim().toLowerCase() &&
+          acc['password'] == password,
+      orElse: () => {},
+    );
 
-    if (savedUsername == username && savedPassword == password) {
+    if (match.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyCurrentUser, username.trim());
       await prefs.setBool(_keyIsLoggedIn, true);
       return true;
     }
@@ -100,7 +131,6 @@ class AuthService {
       }
     }
 
-    // Fallback SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_keyIsLoggedIn) ?? false;
   }
@@ -108,7 +138,7 @@ class AuthService {
   // Mendapatkan username saat ini
   Future<String> getCurrentUsername() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyUsername) ?? 'User';
+    return prefs.getString(_keyCurrentUser) ?? 'User';
   }
 
   // Logout
@@ -123,5 +153,6 @@ class AuthService {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyIsLoggedIn, false);
+    await prefs.remove(_keyCurrentUser);
   }
 }

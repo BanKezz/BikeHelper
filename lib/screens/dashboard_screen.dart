@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import '../models/motor_model.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import 'login_screen.dart';
+import 'motor_list_screen.dart';
 import 'input_data_motor_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -15,12 +17,15 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with TickerProviderStateMixin {
   int _selectedIndex = 0;
   late MotorModel _currentMotor;
   List<Map<String, dynamic>> _jadwalServis = [];
   List<Map<String, dynamic>> _catatanServis = [];
   bool _isLoadingData = true;
+  String _username = 'User';
+  late AnimationController _navAnimController;
 
   final List<Map<String, dynamic>> _statusKomponen = [
     {'nama': 'Oli Mesin', 'status': 'Baik', 'isGood': true},
@@ -32,7 +37,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _currentMotor = widget.motor;
+    _navAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
     _loadData();
+    _loadUsername();
+  }
+
+  @override
+  void dispose() {
+    _navAnimController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadUsername() async {
+    final name = await AuthService().getCurrentUsername();
+    if (mounted) setState(() => _username = name);
   }
 
   Future<void> _loadData() async {
@@ -40,35 +61,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final db = DatabaseService();
     final jadwal = await db.getJadwalServis();
     final catatan = await db.getCatatanServis();
-    setState(() {
-      _jadwalServis = jadwal;
-      _catatanServis = catatan;
-      _isLoadingData = false;
-    });
+    if (mounted) {
+      setState(() {
+        _jadwalServis = jadwal;
+        _catatanServis = catatan;
+        _isLoadingData = false;
+      });
+    }
+  }
+
+  void _showSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: GoogleFonts.inter(fontSize: 13)),
+        backgroundColor: AppTheme.primaryBlack,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceGray,
-      appBar: AppBar(
-        backgroundColor: AppTheme.surfaceGray,
-        elevation: 0,
-        title: const Text(
-          'BikeHelpers',
-          style: TextStyle(
-            color: AppTheme.textPrimary,
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: AppTheme.textPrimary),
-            onPressed: () {},
-          ),
-        ],
-      ),
+      appBar: _buildAppBar(),
       body: IndexedStack(
         index: _selectedIndex,
         children: [
@@ -83,8 +101,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? FloatingActionButton(
               backgroundColor: AppTheme.primaryBlack,
               foregroundColor: AppTheme.white,
-              elevation: 2,
-              child: const Icon(Icons.add),
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              child: const Icon(Icons.add_rounded, size: 28),
               onPressed: () {
                 if (_selectedIndex == 1) {
                   _showTambahJadwalDialog();
@@ -98,12 +118,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  PreferredSizeWidget _buildAppBar() {
+    final titles = ['Beranda', 'Jadwal Servis', 'Catatan Servis', 'Favorit', 'Profil'];
+    return AppBar(
+      backgroundColor: AppTheme.surfaceGray,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      title: Text(
+        _selectedIndex == 0 ? 'BikeHelpers' : titles[_selectedIndex],
+        style: GoogleFonts.inter(
+          color: AppTheme.textPrimary,
+          fontWeight: FontWeight.w700,
+          fontSize: 18,
+        ),
+      ),
+      actions: [
+        if (_selectedIndex == 0)
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined,
+                color: AppTheme.textPrimary),
+            onPressed: () => _showSnackBar('Belum ada notifikasi baru'),
+          ),
+      ],
+    );
+  }
+
+  // =====================
+  // HOME TAB
+  // =====================
+
   Widget _buildHomeTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _buildGreetingCard(),
+          const SizedBox(height: 14),
           _buildStatusMotorCard(),
           const SizedBox(height: 14),
           _buildPengingatCard(),
@@ -111,7 +162,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _buildShortcutCard(),
           const SizedBox(height: 14),
           _buildInfoMotorCard(),
-          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGreetingCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryBlack,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryBlack.withValues(alpha: 0.2),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Halo, $_username! 👋',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Motor kamu butuh perhatian hari ini?',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppTheme.white.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppTheme.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.directions_bike_rounded,
+                color: AppTheme.white, size: 24),
+          ),
         ],
       ),
     );
@@ -119,47 +223,86 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildStatusMotorCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppTheme.cardGray,
-        borderRadius: BorderRadius.circular(12),
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: AppTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Status Motor Anda',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Status Motor',
+                style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceGray,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _currentMotor.namaMotor,
+                  style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
             children: [
               Container(
-                width: 60,
-                height: 60,
+                width: 58,
+                height: 58,
                 decoration: BoxDecoration(
-                  color: AppTheme.borderGray,
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppTheme.surfaceGray,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.image_outlined, color: AppTheme.textHint, size: 28),
+                child: const Icon(Icons.directions_bike_rounded,
+                    color: AppTheme.primaryBlack, size: 30),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: _statusKomponen.map((item) {
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 3),
+                      padding: const EdgeInsets.only(bottom: 6),
                       child: Row(
                         children: [
-                          Text('${item['nama']}: ',
-                              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: item['isGood']
+                                  ? AppTheme.statusGood
+                                  : AppTheme.statusWarning,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text('${item['nama']}:  ',
+                              style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary)),
                           Text(
                             item['status'],
-                            style: TextStyle(
+                            style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: item['isGood'] ? AppTheme.statusGood : AppTheme.statusWarning,
+                              color: item['isGood']
+                                  ? AppTheme.statusGood
+                                  : AppTheme.statusWarning,
                             ),
                           ),
                         ],
@@ -184,32 +327,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
         : 'Servis';
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppTheme.cardGray,
-        borderRadius: BorderRadius.circular(12),
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: AppTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Pengingat Penting',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.statusWarning.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.notifications_active_outlined,
+                    size: 18, color: AppTheme.statusWarning),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Pengingat Servis',
+                style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Text(
             _jadwalServis.isNotEmpty
                 ? '$komponen dalam $sisaKm Km'
                 : 'Tidak ada jadwal servis terdekat',
-            style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            style: GoogleFonts.inter(
+                fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () => setState(() => _selectedIndex = 1),
-              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 42)),
-              child: const Text('Lihat Selengkapnya'),
+              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 44)),
+              child: Text('Lihat Jadwal',
+                  style: GoogleFonts.inter(
+                      fontSize: 14, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -219,88 +383,138 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildShortcutCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppTheme.cardGray,
-        borderRadius: BorderRadius.circular(12),
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: AppTheme.cardShadow,
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _selectedIndex = 1),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppTheme.borderGray,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.calendar_today_outlined, size: 24, color: AppTheme.textPrimary),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text('Jadwal',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppTheme.textPrimary)),
-                    ],
-                  ),
-                ),
-              ),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _selectedIndex = 2),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppTheme.borderGray,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.assignment_outlined, size: 24, color: AppTheme.textPrimary),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text('Catatan\nServis',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppTheme.textPrimary)),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            'Akses Cepat',
+            style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary),
           ),
           const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => setState(() => _selectedIndex = 1),
-              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 42)),
-              child: const Text('Lihat Jadwal'),
-            ),
+          Row(
+            children: [
+              Expanded(child: _buildShortcutItem(
+                icon: Icons.calendar_today_rounded,
+                label: 'Jadwal\nServis',
+                onTap: () => setState(() => _selectedIndex = 1),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: _buildShortcutItem(
+                icon: Icons.assignment_rounded,
+                label: 'Catatan\nServis',
+                onTap: () => setState(() => _selectedIndex = 2),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: _buildShortcutItem(
+                icon: Icons.directions_bike_rounded,
+                label: 'Motor\nSaya',
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const MotorListScreen(),
+                    ),
+                  );
+                },
+              )),
+            ],
           ),
         ],
       ),
     );
   }
 
+  Widget _buildShortcutItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceGray,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 26, color: AppTheme.primaryBlack),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildInfoMotorCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppTheme.cardGray,
-        borderRadius: BorderRadius.circular(12),
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: AppTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Info Motor',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Info Motor',
+                style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary),
+              ),
+              GestureDetector(
+                onTap: () async {
+                  final updatedMotor =
+                      await Navigator.of(context).push<MotorModel>(
+                    MaterialPageRoute(
+                      builder: (_) => InputDataMotorScreen(
+                        isFirstTime: false,
+                        existingData: _currentMotor,
+                      ),
+                    ),
+                  );
+                  if (updatedMotor != null) {
+                    setState(() => _currentMotor = updatedMotor);
+                  }
+                },
+                child: Text(
+                  'Edit',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                    decoration: TextDecoration.underline,
+                    decorationColor: AppTheme.textSecondary,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           _infoRow('Nama Motor', _currentMotor.namaMotor),
+          if (_currentMotor.platNomor != null && _currentMotor.platNomor!.isNotEmpty)
+            _infoRow('Plat Nomor', _currentMotor.platNomor!),
           _infoRow('Tahun', _currentMotor.tahun),
           _infoRow('Odometer', '${_currentMotor.odometer} km'),
         ],
@@ -310,215 +524,380 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _infoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+          Text(label,
+              style: GoogleFonts.inter(
+                  fontSize: 13, color: AppTheme.textSecondary)),
           Text(value,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
+              style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary)),
         ],
       ),
     );
   }
+
+  // =====================
+  // JADWAL TAB
+  // =====================
 
   Widget _buildJadwalTab() {
     if (_isLoadingData) {
-      return const Center(child: CircularProgressIndicator(color: AppTheme.primaryBlack));
+      return const Center(
+          child: CircularProgressIndicator(color: AppTheme.primaryBlack));
     }
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
       children: [
-        const Text('Jadwal Servis',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
-        const SizedBox(height: 16),
         if (_jadwalServis.isEmpty)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Text('Belum ada jadwal servis.', style: TextStyle(color: AppTheme.textSecondary)),
-            ),
-          )
+          _buildEmptyListState('Belum ada jadwal servis.',
+              'Tambah jadwal dengan tombol + di bawah')
         else
-          ..._jadwalServis.map((item) => _buildJadwalItem(item)),
+          ..._jadwalServis.asMap().entries.map((e) =>
+              _buildJadwalItem(e.value, e.key)),
       ],
     );
   }
 
-  Widget _buildJadwalItem(Map<String, dynamic> item) {
+  Widget _buildJadwalItem(Map<String, dynamic> item, int index) {
     final sisaKm = item['sisaKm'] ?? item['sisa_km'] ?? '...';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppTheme.cardGray, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AppTheme.borderGray, borderRadius: BorderRadius.circular(8)),
-            child: const Icon(Icons.build_outlined, size: 22, color: AppTheme.textPrimary),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item['komponen'] ?? '',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
-                const SizedBox(height: 4),
-                Text('Sisa $sisaKm km  •  ${item['tanggal'] ?? ''}',
-                    style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-              ],
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 250 + index * 60),
+      curve: Curves.easeOut,
+      builder: (_, val, child) =>
+          Opacity(opacity: val, child: Transform.translate(
+            offset: Offset(0, 12 * (1 - val)), child: child)),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: AppTheme.subtleShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceGray,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.build_rounded,
+                  size: 20, color: AppTheme.primaryBlack),
             ),
-          ),
-          const Icon(Icons.chevron_right, color: AppTheme.textHint, size: 20),
-        ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item['komponen'] ?? '',
+                      style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.speed_outlined,
+                          size: 11, color: AppTheme.textSecondary),
+                      const SizedBox(width: 3),
+                      Text('Sisa $sisaKm km',
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: AppTheme.textSecondary)),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.calendar_today_outlined,
+                          size: 11, color: AppTheme.textSecondary),
+                      const SizedBox(width: 3),
+                      Text(item['tanggal'] ?? '',
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: AppTheme.textSecondary)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: AppTheme.textHint, size: 20),
+          ],
+        ),
       ),
     );
   }
+
+  // =====================
+  // CATATAN TAB
+  // =====================
 
   Widget _buildCatatanTab() {
     if (_isLoadingData) {
-      return const Center(child: CircularProgressIndicator(color: AppTheme.primaryBlack));
+      return const Center(
+          child: CircularProgressIndicator(color: AppTheme.primaryBlack));
     }
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
       children: [
-        const Text('Catatan Servis',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
-        const SizedBox(height: 16),
         if (_catatanServis.isEmpty)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Text('Belum ada catatan servis.', style: TextStyle(color: AppTheme.textSecondary)),
-            ),
-          )
+          _buildEmptyListState('Belum ada catatan servis.',
+              'Tambah catatan dengan tombol + di bawah')
         else
-          ..._catatanServis.map((item) => _buildCatatanItem(
-                item['komponen'] ?? '',
-                item['tanggal'] ?? '',
-                item['odometer'] ?? '',
-              )),
+          ..._catatanServis.asMap().entries.map((e) => _buildCatatanItem(
+              e.value['komponen'] ?? '',
+              e.value['tanggal'] ?? '',
+              e.value['odometer'] ?? '',
+              e.key)),
       ],
     );
   }
 
-  Widget _buildCatatanItem(String komponen, String tanggal, String odometer) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppTheme.cardGray, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AppTheme.borderGray, borderRadius: BorderRadius.circular(8)),
-            child: const Icon(Icons.check_circle_outline, size: 22, color: AppTheme.statusGood),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(komponen,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
-                const SizedBox(height: 4),
-                Text('$tanggal  •  $odometer',
-                    style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-              ],
+  Widget _buildCatatanItem(
+      String komponen, String tanggal, String odometer, int index) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 250 + index * 60),
+      curve: Curves.easeOut,
+      builder: (_, val, child) =>
+          Opacity(opacity: val, child: Transform.translate(
+            offset: Offset(0, 12 * (1 - val)), child: child)),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: AppTheme.subtleShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.statusGood.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.check_circle_rounded,
+                  size: 20, color: AppTheme.statusGood),
             ),
-          ),
-        ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(komponen,
+                      style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today_outlined,
+                          size: 11, color: AppTheme.textSecondary),
+                      const SizedBox(width: 3),
+                      Text(tanggal,
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: AppTheme.textSecondary)),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.speed_outlined,
+                          size: 11, color: AppTheme.textSecondary),
+                      const SizedBox(width: 3),
+                      Text(odometer,
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: AppTheme.textSecondary)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
+  Widget _buildEmptyListState(String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 60),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: AppTheme.cardGray,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.inbox_outlined,
+                  size: 32, color: AppTheme.textHint),
+            ),
+            const SizedBox(height: 14),
+            Text(title,
+                style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary)),
+            const SizedBox(height: 4),
+            Text(subtitle,
+                style: GoogleFonts.inter(
+                    fontSize: 12, color: AppTheme.textSecondary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // =====================
+  // FAVORIT TAB
+  // =====================
+
   Widget _buildFavoriteTab() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.favorite_border, size: 48, color: AppTheme.textHint),
-          SizedBox(height: 12),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: const BoxDecoration(
+              color: AppTheme.cardGray,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.favorite_border_rounded,
+                size: 36, color: AppTheme.textHint),
+          ),
+          const SizedBox(height: 16),
           Text('Belum ada bengkel favorit',
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+              style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary)),
+          const SizedBox(height: 6),
+          Text('Fitur ini akan segera hadir',
+              style: GoogleFonts.inter(
+                  fontSize: 13, color: AppTheme.textSecondary)),
         ],
       ),
     );
   }
 
+  // =====================
+  // PROFIL TAB
+  // =====================
+
   Widget _buildProfilTab() {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
       children: [
-        const SizedBox(height: 20),
+        // Avatar
         Center(
-          child: Container(
-            width: 80,
-            height: 80,
-            decoration: const BoxDecoration(color: AppTheme.cardGray, shape: BoxShape.circle),
-            child: const Icon(Icons.person_outline, size: 40, color: AppTheme.textHint),
-          ),
-        ),
-        const SizedBox(height: 20),
-        _buildProfilMenuItem(
-          icon: Icons.directions_bike_outlined,
-          label: 'Data Motor',
-          onTap: () async {
-            final updatedMotor = await Navigator.of(context).push<MotorModel>(
-              MaterialPageRoute(
-                builder: (_) => InputDataMotorScreen(
-                  isFirstTime: false,
-                  existingData: _currentMotor,
+          child: Column(
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryBlack,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primaryBlack.withValues(alpha: 0.2),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.person_rounded,
+                    size: 40, color: AppTheme.white),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _username,
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
                 ),
               ),
+              const SizedBox(height: 2),
+              Text(
+                'Pengguna BikeHelpers',
+                style: GoogleFonts.inter(
+                    fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 28),
+
+        // Divider section
+        _buildSectionLabel('Motor'),
+        _buildProfilMenuItem(
+          icon: Icons.directions_bike_outlined,
+          label: 'Daftar Motor Saya',
+          onTap: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MotorListScreen()),
             );
-            if (updatedMotor != null) {
-              setState(() {
-                _currentMotor = updatedMotor;
-              });
-            }
           },
         ),
+        const SizedBox(height: 16),
+        _buildSectionLabel('Pengaturan'),
         _buildProfilMenuItem(
           icon: Icons.notifications_outlined,
           label: 'Pengaturan Notifikasi',
-          onTap: () {},
+          onTap: () => _showSnackBar('Fitur dalam pengembangan'),
         ),
         _buildProfilMenuItem(
           icon: Icons.lock_outline,
           label: 'Ubah Password',
-          onTap: () {},
+          onTap: () => _showSnackBar('Fitur dalam pengembangan'),
         ),
-        // ====================================
-        // LOGOUT -- memanggil AuthService
-        // ====================================
+        const SizedBox(height: 16),
+        _buildSectionLabel('Akun'),
         _buildProfilMenuItem(
-          icon: Icons.logout,
+          icon: Icons.logout_rounded,
           label: 'Keluar',
+          isDestructive: true,
           onTap: () async {
-            // Tampilkan dialog konfirmasi dulu
             final konfirmasi = await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
                 backgroundColor: AppTheme.white,
-                title: const Text(
-                  'Keluar',
-                  style: TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                title: Text(
+                  'Keluar dari Akun',
+                  style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary),
                 ),
-                content: const Text(
-                  'Yakin ingin keluar dari akun?',
-                  style: TextStyle(color: AppTheme.textSecondary),
+                content: Text(
+                  'Yakin ingin keluar dari akun $_username?',
+                  style: GoogleFonts.inter(
+                      color: AppTheme.textSecondary, fontSize: 14),
                 ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(ctx).pop(false),
-                    child: const Text('Batal', style: TextStyle(color: AppTheme.textSecondary)),
+                    child: Text('Batal',
+                        style: GoogleFonts.inter(
+                            color: AppTheme.textSecondary)),
                   ),
                   ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(80, 40),
+                      backgroundColor: const Color(0xFFB71C1C),
+                    ),
                     onPressed: () => Navigator.of(ctx).pop(true),
-                    child: const Text('Keluar'),
+                    child: Text('Keluar',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -526,6 +905,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             if (konfirmasi == true && mounted) {
               await AuthService().logout();
+              if (!mounted) return;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
                 (route) => false,
@@ -537,45 +917,87 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildSectionLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        label.toUpperCase(),
+        style: GoogleFonts.inter(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: AppTheme.textHint,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
   Widget _buildProfilMenuItem({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    bool isDestructive = false,
   }) {
+    final color = isDestructive ? const Color(0xFFB71C1C) : AppTheme.textPrimary;
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(color: AppTheme.cardGray, borderRadius: BorderRadius.circular(10)),
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: AppTheme.subtleShadow,
+      ),
       child: ListTile(
-        leading: Icon(icon, color: AppTheme.textPrimary, size: 22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        leading: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: isDestructive
+                ? const Color(0xFFB71C1C).withValues(alpha: 0.08)
+                : AppTheme.surfaceGray,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
         title: Text(
           label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppTheme.textPrimary),
+          style: GoogleFonts.inter(
+              fontSize: 14, fontWeight: FontWeight.w500, color: color),
         ),
-        trailing: const Icon(Icons.chevron_right, color: AppTheme.textHint, size: 20),
+        trailing: const Icon(Icons.chevron_right_rounded,
+            color: AppTheme.textHint, size: 20),
         onTap: onTap,
       ),
     );
   }
 
+  // =====================
+  // BOTTOM NAV
+  // =====================
+
   Widget _buildBottomNav() {
     final items = [
-      {'icon': Icons.home_outlined, 'activeIcon': Icons.home},
-      {'icon': Icons.calendar_today_outlined, 'activeIcon': Icons.calendar_today},
-      {'icon': Icons.assignment_outlined, 'activeIcon': Icons.assignment},
-      {'icon': Icons.favorite_border, 'activeIcon': Icons.favorite},
-      {'icon': Icons.person_outline, 'activeIcon': Icons.person},
+      {'icon': Icons.home_outlined, 'activeIcon': Icons.home_rounded, 'label': 'Beranda'},
+      {'icon': Icons.calendar_today_outlined, 'activeIcon': Icons.calendar_today_rounded, 'label': 'Jadwal'},
+      {'icon': Icons.assignment_outlined, 'activeIcon': Icons.assignment_rounded, 'label': 'Catatan'},
+      {'icon': Icons.favorite_border_rounded, 'activeIcon': Icons.favorite_rounded, 'label': 'Favorit'},
+      {'icon': Icons.person_outline_rounded, 'activeIcon': Icons.person_rounded, 'label': 'Profil'},
     ];
 
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.white,
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, -2)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 16,
+            offset: const Offset(0, -2),
+          ),
         ],
       ),
       child: SafeArea(
         child: SizedBox(
-          height: 56,
+          height: 64,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: List.generate(items.length, (index) {
@@ -583,29 +1005,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
               return GestureDetector(
                 onTap: () => setState(() => _selectedIndex = index),
                 behavior: HitTestBehavior.opaque,
-                child: SizedBox(
-                  width: 48,
-                  height: 56,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 60,
+                  height: 64,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        isSelected
-                            ? items[index]['activeIcon'] as IconData
-                            : items[index]['icon'] as IconData,
-                        color: isSelected ? AppTheme.primaryBlack : AppTheme.textHint,
-                        size: 24,
-                      ),
-                      if (isSelected)
-                        Container(
-                          margin: const EdgeInsets.only(top: 4),
-                          width: 4,
-                          height: 4,
-                          decoration: const BoxDecoration(
-                            color: AppTheme.primaryBlack,
-                            shape: BoxShape.circle,
-                          ),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: EdgeInsets.all(isSelected ? 6 : 0),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppTheme.primaryBlack.withValues(alpha: 0.08)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
                         ),
+                        child: Icon(
+                          isSelected
+                              ? items[index]['activeIcon'] as IconData
+                              : items[index]['icon'] as IconData,
+                          color: isSelected
+                              ? AppTheme.primaryBlack
+                              : AppTheme.textHint,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        items[index]['label'] as String,
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          color: isSelected
+                              ? AppTheme.primaryBlack
+                              : AppTheme.textHint,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -617,6 +1055,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // =====================
+  // DIALOGS
+  // =====================
+
   void _showTambahJadwalDialog() {
     final komponenController = TextEditingController();
     final sisaKmController = TextEditingController();
@@ -626,36 +1068,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.white,
-        title: const Text('Tambah Jadwal Servis', style: TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Tambah Jadwal Servis',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
-                controller: komponenController,
-                decoration: const InputDecoration(hintText: 'Komponen (cth: Ganti Oli)'),
-              ),
+              _dialogField('Komponen',
+                  controller: komponenController,
+                  hint: 'cth: Ganti Oli'),
               const SizedBox(height: 12),
-              TextField(
-                controller: sisaKmController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(hintText: 'Sisa Kilometer (cth: 500)'),
-              ),
+              _dialogField('Sisa Kilometer',
+                  controller: sisaKmController,
+                  hint: 'cth: 500',
+                  type: TextInputType.number),
               const SizedBox(height: 12),
-              TextField(
-                controller: tanggalController,
-                decoration: const InputDecoration(hintText: 'Tanggal Target (cth: 25 Jul 2025)'),
-              ),
+              _dialogField('Tanggal Target',
+                  controller: tanggalController,
+                  hint: 'cth: 25 Jul 2025'),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Batal', style: TextStyle(color: AppTheme.textSecondary)),
+            child: Text('Batal',
+                style: GoogleFonts.inter(color: AppTheme.textSecondary)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(minimumSize: const Size(80, 40)),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(90, 40)),
             onPressed: () async {
               if (komponenController.text.isNotEmpty &&
                   sisaKmController.text.isNotEmpty &&
@@ -670,7 +1114,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 await _loadData();
               }
             },
-            child: const Text('Simpan'),
+            child: Text('Simpan',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -686,35 +1131,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.white,
-        title: const Text('Tambah Catatan Servis', style: TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Tambah Catatan Servis',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
-                controller: komponenController,
-                decoration: const InputDecoration(hintText: 'Komponen (cth: Ganti Oli)'),
-              ),
+              _dialogField('Komponen',
+                  controller: komponenController,
+                  hint: 'cth: Ganti Oli'),
               const SizedBox(height: 12),
-              TextField(
-                controller: tanggalController,
-                decoration: const InputDecoration(hintText: 'Tanggal (cth: 10 Jan 2025)'),
-              ),
+              _dialogField('Tanggal',
+                  controller: tanggalController,
+                  hint: 'cth: 10 Jan 2025'),
               const SizedBox(height: 12),
-              TextField(
-                controller: odometerController,
-                decoration: const InputDecoration(hintText: 'Odometer saat servis (cth: 12.500 km)'),
-              ),
+              _dialogField('Odometer',
+                  controller: odometerController,
+                  hint: 'cth: 12.500 km'),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Batal', style: TextStyle(color: AppTheme.textSecondary)),
+            child: Text('Batal',
+                style: GoogleFonts.inter(color: AppTheme.textSecondary)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(minimumSize: const Size(80, 40)),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(90, 40)),
             onPressed: () async {
               if (komponenController.text.isNotEmpty &&
                   tanggalController.text.isNotEmpty &&
@@ -729,10 +1176,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 await _loadData();
               }
             },
-            child: const Text('Simpan'),
+            child: Text('Simpan',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _dialogField(
+    String label, {
+    required TextEditingController controller,
+    required String hint,
+    TextInputType type = TextInputType.text,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          keyboardType: type,
+          style: GoogleFonts.inter(fontSize: 13),
+          decoration: InputDecoration(hintText: hint),
+        ),
+      ],
     );
   }
 }
