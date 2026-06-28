@@ -1,6 +1,10 @@
 # BikeHelper
 
-Project ini di peruntukan untuk tugas besar Praktikum Pemrograman Berbasis Mobile
+BikeHelper di peruntukan untuk para pengguna motor yang sering lupa dalam penanganan servis kendaraan motor, seperti servis oli dan lain sebagainya.
+Saya harap dengan adanya BikeHelper dapat memberikan dampak kepada para pengguna untuk tidak lupa dalam merawat kendaraan motor pribadinya
+
+
+roject ini di peruntukan untuk tugas besar Praktikum Pemrograman Berbasis Mobile
 
 Struktur Code
 <img width="290" height="811" alt="image" src="https://github.com/user-attachments/assets/a333bad3-80c1-4d5c-88e3-d1b161cead7d" />
