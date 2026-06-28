@@ -59,8 +59,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   Future<void> _loadData() async {
     setState(() => _isLoadingData = true);
     final db = DatabaseService();
-    final jadwal = await db.getJadwalServis();
-    final catatan = await db.getCatatanServis();
+    final motorId = _currentMotor.id ?? 'default_motor';
+    final jadwal = await db.getJadwalServis(motorId);
+    final catatan = await db.getCatatanServis(motorId);
     if (mounted) {
       setState(() {
         _jadwalServis = jadwal;
@@ -574,57 +575,66 @@ class _DashboardScreenState extends State<DashboardScreen>
             offset: Offset(0, 12 * (1 - val)), child: child)),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppTheme.white,
           borderRadius: BorderRadius.circular(16),
           boxShadow: AppTheme.subtleShadow,
         ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceGray,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.build_rounded,
-                  size: 20, color: AppTheme.primaryBlack),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => _showJadwalActionBottomSheet(item),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
                 children: [
-                  Text(item['komponen'] ?? '',
-                      style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary)),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.speed_outlined,
-                          size: 11, color: AppTheme.textSecondary),
-                      const SizedBox(width: 3),
-                      Text('Sisa $sisaKm km',
-                          style: GoogleFonts.inter(
-                              fontSize: 12, color: AppTheme.textSecondary)),
-                      const SizedBox(width: 10),
-                      const Icon(Icons.calendar_today_outlined,
-                          size: 11, color: AppTheme.textSecondary),
-                      const SizedBox(width: 3),
-                      Text(item['tanggal'] ?? '',
-                          style: GoogleFonts.inter(
-                              fontSize: 12, color: AppTheme.textSecondary)),
-                    ],
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceGray,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.build_rounded,
+                        size: 20, color: AppTheme.primaryBlack),
                   ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item['komponen'] ?? '',
+                            style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textPrimary)),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.speed_outlined,
+                                size: 11, color: AppTheme.textSecondary),
+                            const SizedBox(width: 3),
+                            Text('Sisa $sisaKm km',
+                                style: GoogleFonts.inter(
+                                    fontSize: 12, color: AppTheme.textSecondary)),
+                            const SizedBox(width: 10),
+                            const Icon(Icons.calendar_today_outlined,
+                                size: 11, color: AppTheme.textSecondary),
+                            const SizedBox(width: 3),
+                            Text(item['tanggal'] ?? '',
+                                style: GoogleFonts.inter(
+                                    fontSize: 12, color: AppTheme.textSecondary)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: AppTheme.textHint, size: 20),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded,
-                color: AppTheme.textHint, size: 20),
-          ],
+          ),
         ),
       ),
     );
@@ -1107,6 +1117,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 Navigator.of(ctx).pop();
                 setState(() => _isLoadingData = true);
                 await DatabaseService().addJadwalServis(
+                  _currentMotor.id ?? 'default_motor',
                   komponenController.text.trim(),
                   sisaKmController.text.trim(),
                   tanggalController.text.trim(),
@@ -1169,6 +1180,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 Navigator.of(ctx).pop();
                 setState(() => _isLoadingData = true);
                 await DatabaseService().addCatatanServis(
+                  _currentMotor.id ?? 'default_motor',
                   komponenController.text.trim(),
                   tanggalController.text.trim(),
                   odometerController.text.trim(),
@@ -1207,5 +1219,332 @@ class _DashboardScreenState extends State<DashboardScreen>
         ),
       ],
     );
+  }
+
+  void _showJadwalActionBottomSheet(Map<String, dynamic> item) {
+    final id = item['id']?.toString() ?? '';
+    final komponen = item['komponen'] ?? '';
+    final sisaKm = item['sisaKm'] ?? item['sisa_km'] ?? '...';
+    final tanggal = item['tanggal'] ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppTheme.borderGray,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  komponen,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Sisa $sisaKm km • Target: $tanggal',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.statusGood.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.check_circle_outline_rounded,
+                        color: AppTheme.statusGood, size: 20),
+                  ),
+                  title: Text(
+                    'Selesai Servis',
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: AppTheme.textPrimary),
+                  ),
+                  subtitle: Text(
+                    'Pindahkan ke Catatan Servis',
+                    style: GoogleFonts.inter(
+                        fontSize: 11, color: AppTheme.textSecondary),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _showKonfirmasiSelesaiServisDialog(item);
+                  },
+                ),
+                const Divider(height: 1, color: AppTheme.surfaceGray),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryBlack.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.edit_outlined,
+                        color: AppTheme.primaryBlack, size: 20),
+                  ),
+                  title: Text(
+                    'Edit Jadwal',
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: AppTheme.textPrimary),
+                  ),
+                  subtitle: Text(
+                    'Ubah komponen, sisa km, atau tanggal',
+                    style: GoogleFonts.inter(
+                        fontSize: 11, color: AppTheme.textSecondary),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _showEditJadwalDialog(item);
+                  },
+                ),
+                const Divider(height: 1, color: AppTheme.surfaceGray),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFB71C1C).withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.delete_outline_rounded,
+                        color: Color(0xFFB71C1C), size: 20),
+                  ),
+                  title: Text(
+                    'Hapus Jadwal',
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: const Color(0xFFB71C1C)),
+                  ),
+                  subtitle: Text(
+                    'Hapus jadwal ini secara permanen',
+                    style: GoogleFonts.inter(
+                        fontSize: 11, color: AppTheme.textSecondary),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _showKonfirmasiHapusJadwalDialog(id, komponen);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showEditJadwalDialog(Map<String, dynamic> item) {
+    final id = item['id']?.toString() ?? '';
+    final komponenController = TextEditingController(text: item['komponen']);
+    final sisaKmController = TextEditingController(
+        text: (item['sisaKm'] ?? item['sisa_km'] ?? '').toString());
+    final tanggalController = TextEditingController(text: item['tanggal']);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Edit Jadwal Servis',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _dialogField('Komponen',
+                  controller: komponenController,
+                  hint: 'cth: Ganti Oli'),
+              const SizedBox(height: 12),
+              _dialogField('Sisa Kilometer',
+                  controller: sisaKmController,
+                  hint: 'cth: 500',
+                  type: TextInputType.number),
+              const SizedBox(height: 12),
+              _dialogField('Tanggal Target',
+                  controller: tanggalController,
+                  hint: 'cth: 25 Jul 2025'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Batal',
+                style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(minimumSize: const Size(90, 40)),
+            onPressed: () async {
+              if (komponenController.text.isNotEmpty &&
+                  sisaKmController.text.isNotEmpty &&
+                  tanggalController.text.isNotEmpty) {
+                Navigator.of(ctx).pop();
+                setState(() => _isLoadingData = true);
+                await DatabaseService().updateJadwalServis(
+                  id,
+                  komponenController.text.trim(),
+                  sisaKmController.text.trim(),
+                  tanggalController.text.trim(),
+                );
+                await _loadData();
+                _showSnackBar('Jadwal servis berhasil diperbarui');
+              }
+            },
+            child: Text('Simpan',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showKonfirmasiHapusJadwalDialog(String id, String komponen) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Hapus Jadwal Servis',
+          style: GoogleFonts.inter(
+              fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+        ),
+        content: Text(
+          'Apakah Anda yakin ingin menghapus jadwal servis untuk "$komponen"?',
+          style: GoogleFonts.inter(
+              color: AppTheme.textSecondary, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Batal',
+                style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(80, 40),
+              backgroundColor: const Color(0xFFB71C1C),
+            ),
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              setState(() => _isLoadingData = true);
+              await DatabaseService().deleteJadwalServis(id);
+              await _loadData();
+              _showSnackBar('Jadwal servis berhasil dihapus');
+            },
+            child: Text('Hapus',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showKonfirmasiSelesaiServisDialog(Map<String, dynamic> item) {
+    final id = item['id']?.toString() ?? '';
+    final komponen = item['komponen'] ?? '';
+    final String formattedDate = _getFormattedToday();
+    final odometerController = TextEditingController(text: '${_currentMotor.odometer} km');
+    final tanggalController = TextEditingController(text: formattedDate);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Konfirmasi Servis Selesai',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Konfirmasi data berikut untuk mencatat servis "$komponen" ke riwayat:',
+                style: GoogleFonts.inter(
+                    fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              _dialogField('Odometer Saat Ini',
+                  controller: odometerController,
+                  hint: 'cth: 12.500 km'),
+              const SizedBox(height: 12),
+              _dialogField('Tanggal Servis',
+                  controller: tanggalController,
+                  hint: 'cth: 28 Jun 2026'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Batal',
+                style: GoogleFonts.inter(color: AppTheme.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(minimumSize: const Size(90, 40)),
+            onPressed: () async {
+              if (odometerController.text.isNotEmpty &&
+                  tanggalController.text.isNotEmpty) {
+                Navigator.of(ctx).pop();
+                setState(() => _isLoadingData = true);
+                
+                final db = DatabaseService();
+                await db.addCatatanServis(
+                  _currentMotor.id ?? 'default_motor',
+                  komponen,
+                  tanggalController.text.trim(),
+                  odometerController.text.trim(),
+                );
+                await db.deleteJadwalServis(id);
+                await _loadData();
+                _showSnackBar('Servis "$komponen" ditandai selesai dan dicatat');
+              }
+            },
+            child: Text('Konfirmasi',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getFormattedToday() {
+    final now = DateTime.now();
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    return '${now.day.toString().padLeft(2, '0')} ${months[now.month - 1]} ${now.year}';
   }
 }
